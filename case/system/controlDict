@@ -1,0 +1,107 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2112                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#include "./0/params"
+
+application     pimpleFoam;
+
+startFrom       startTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         4;
+
+deltaT          0.001;
+
+writeControl    adjustable;
+
+writeInterval   10;
+
+purgeWrite      0;
+
+writeFormat     ascii;
+
+writePrecision  6;
+
+writeCompression off;
+
+timeFormat      general;
+
+timePrecision   6;
+
+runTimeModifiable true;
+
+functions
+{
+    forces
+    {
+ 	type        forceCoeffs;
+    	functionObjectLibs ( "libforces.so" );
+    	outputControl timeStep;
+    	outputInterval 1;
+
+        patches    (cylinder);
+
+        pName       p;
+        UName       U;
+        log         true;
+	rho    rhoInf; // name of rho
+        rhoInf      1; //the free stream density
+        CofR        ( 0 0 0 ); // Centre of rotation
+        liftDir     ( 0. 1.0 0 ); // lift force vector
+        dragDir     ( 1.0 0. 0 ); // drag force vector
+        pitchAxis   ( 0 0 1 ); //axis of rotation
+        magUInf     1.0; //is the magnitude of the free stream velocity
+        lRef        1;// z 
+        Aref        2; //reference area 
+    }
+    
+        BCcontrol
+    {
+
+    type UpdateBC;
+    functionObjectLibs ( "libCruising_auto_phase.so" );
+    outputControl timeStep;
+    outputInterval 1;
+    patches    (cylinder);
+    omega  #eval{1.0/($gamma) };// pi/KC
+    v_st $Vel;
+    dv_start -0.005;
+    per_max 6;
+    per_first 5;
+    corr_time 1;
+    epsilon 0.0001;
+    inletPatchName "cylinder_out";
+    outletPatchName "cylinder_out";
+    pName       p;
+    UName       U;
+    log         true;
+    rho     rhoInf;
+    rhoInf      1; //the free stream density
+    CofR        ( 0. 0. 0. ); // Centre of rotation
+    liftDir     ( 0. 1.0 0 );
+    dragDir     ( 1.0 0. 0 );
+    pitchAxis   ( 0 0 1 );
+    magUInf     1.0; //is the magnitude of the free stream velocity
+    lRef        2.0;//typical length * z
+
+    }
+    
+    }
+
+// ************************************************************************* //

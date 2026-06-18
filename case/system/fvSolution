@@ -1,0 +1,112 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2112                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      fvSolution;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+solvers
+{
+    cellDisplacement
+    {
+        solver          PCG;
+        preconditioner  DIC;
+        tolerance       1e-06;
+        relTol          0;
+        maxIter         100;
+    }
+
+     p
+    {
+       solver          PBiCGStab;
+        preconditioner
+        {
+            preconditioner  GAMG;
+            tolerance       1e-06;
+            relTol          0;
+            smoother        DICGaussSeidel;
+            //cacheAgglomeration no;
+            cacheAgglomeration off;
+        }
+       // preconditioner  DILU;
+
+        tolerance       1e-05;
+        relTol          0.005;
+        maxIter         100;
+    }
+
+
+    pFinal
+    {
+        $p;
+        relTol          0;
+        relTol          0.001;
+        tolerance       1e-07;
+    }
+
+    pcorr
+    {
+        $p;
+    }
+
+    pcorrFinal
+    {
+        $pcorr;
+        relTol          0;
+        tolerance       1e-07;
+    }
+
+    "(U|k|epsilon|omega)"
+    {
+         solver          PBiCG;
+        preconditioner  DILU;
+        tolerance       1e-06;
+        relTol          0.1;
+    }
+
+    "(U|k|epsilon|omega)Final"
+    {
+        $U;
+        tolerance       1e-6;
+        relTol          0;
+    }
+}
+
+
+PIMPLE
+{
+    momentumPredictor   false;
+    correctPhi          true;  //true;
+    oversetAdjustPhi    true;
+    nOuterCorrectors    3;
+    nCorrectors         2;
+    nNonOrthogonalCorrectors 0;
+
+    ddtCorr             true;
+    
+    pRefCell 1001;
+    pRefValue 0; 
+}
+
+relaxationFactors
+{
+    fields
+    {
+    }
+    equations
+    {
+        ".*"           1;
+    }
+}
+
+
+// ************************************************************************* //

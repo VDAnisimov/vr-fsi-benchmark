@@ -1,0 +1,4 @@
+externalForce1/externalForce1.C
+
+
+LIB = $(FOAM_USER_LIBBIN)/libsixDoFexternalForce

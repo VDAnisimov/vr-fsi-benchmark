@@ -1,0 +1,495 @@
+/*---------------------------------------------------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     |
+    \\  /    A nd           | www.openfoam.com
+     \\/     M anipulation  |
+-------------------------------------------------------------------------------
+    Copyright (C) 2011-2016 OpenFOAM Foundation
+    Copyright (C) 2015-2020 OpenCFD Ltd.
+-------------------------------------------------------------------------------
+License
+    This file is part of OpenFOAM.
+
+    OpenFOAM is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+    for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
+
+\*---------------------------------------------------------------------------*/
+
+#include "UpdateBC.H"
+#include "dictionary.H"
+#include "Time.H"
+#include "Pstream.H"
+#include "IOmanip.H"
+#include "fvMesh.H"
+#include "dimensionedTypes.H"
+#include "volFields.H"
+#include "addToRunTimeSelectionTable.H"
+
+#include "wordReList.H"
+
+#include "fixedValueFvPatchFields.H"
+#include "fixedGradientFvPatchFields.H"
+#include "mixedFvPatchFields.H"
+#include "volFields.H"
+#include "PstreamReduceOps.H"
+//#include "DataEntry.H" 
+#include "fvsPatchFields.H"
+
+ #include "surfaceInterpolate.H"
+ #include "fvcDiv.H"
+#include "fvcGrad.H"
+#include "fvcSnGrad.H"
+
+// * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
+
+namespace Foam
+{
+namespace functionObjects
+{
+    defineTypeNameAndDebug(UpdateBC, 0);
+    addToRunTimeSelectionTable(functionObject, UpdateBC, dictionary);
+}
+}
+
+
+// * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
+
+void Foam::functionObjects::UpdateBC::createFiles()
+{
+    if (writeToFile() && !coeffFilePtr_)
+    {
+        coeffFilePtr_ = createFile("coefficient");
+        writeIntegratedHeader("Coefficients", coeffFilePtr_());
+    }
+}
+
+
+void Foam::functionObjects::UpdateBC::writeIntegratedHeader
+(
+    const word& header,
+    Ostream& os
+) const
+{
+
+    writeHeader(os, "Force coefficients");
+    writeCommented(os, "Time");
+    writeTabbed(os, "U");
+    writeTabbed(os, "F");
+    writeTabbed(os, "A");
+    os  << endl;
+}
+
+
+
+// * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
+
+Foam::functionObjects::UpdateBC::UpdateBC
+(
+    const word& name,
+    const Time& runTime,
+    const dictionary& dict,
+    const bool readFields
+)
+:
+    forces(name, runTime, dict, false),
+    frequency_(0),
+    Chi_(1),
+    Phi0_(0),
+    Phi1(-1),
+    v_st_(0.1),
+    dv_start_(0.01),
+    per_max_(5),
+    per_first_(7),
+    corr_time_(1),
+    epsilon_(0.001),
+    inletPatchName_(word::null),
+    outletPatchName_(word::null),
+    v_st1(-20),
+    v_st0(0),
+    F_av(0),
+    F_av_last(0),
+    F_av_old(0),
+    timer1(1),
+    per(0),
+    per_m(7),
+    da(0),
+    coeffFilePtr_()
+{
+if (readFields)
+    {
+        read(dict);
+        Info<< endl;
+    }
+}
+
+
+// * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
+
+bool Foam::functionObjects::UpdateBC::read(const dictionary& dict)
+{
+    forces::read(dict);
+
+    rhoName_ = "rhoInf";
+
+    dict.readEntry("inletPatchName", inletPatchName_);
+    dict.readEntry("outletPatchName", outletPatchName_);
+    dict.readEntry("frequency", frequency_);
+    dict.readEntry("v_st", v_st_);
+    dict.readEntry("Chi", Chi_);
+    dict.readEntry("Phi0", Phi0_);
+
+    dict.readEntry("dv_start", dv_start_);
+    dict.readEntry("per_max", per_max_);
+    dict.readEntry("per_first", per_first_);
+    dict.readEntry("corr_time", corr_time_);
+    dict.readEntry("epsilon", epsilon_);
+
+
+    return true;
+}
+
+
+bool Foam::functionObjects::UpdateBC::execute()
+{
+    forces::calcForcesMoment();
+
+    createFiles();
+
+                     //------------------------------------------------//
+	//----------// Update boundary conditions at inlet and outlet //-------------//
+	           //------------------------------------------------//
+        
+         const fvMesh& mesh = refCast<const fvMesh>(obr_); //get mesh pointer
+        
+        label inletPatchId = mesh.boundaryMesh().findPatchID(inletPatchName_); //find inlet boundary by name
+        label outletPatchId = mesh.boundaryMesh().findPatchID(outletPatchName_); //find outlet boundary by name
+        label cylinderPatchId = mesh.boundaryMesh().findPatchID("cylinder"); //find cylinder boundary by name
+        label topPatchId = mesh.boundaryMesh().findPatchID("top"); //find cylinder boundary by name
+        label bottomPatchId = mesh.boundaryMesh().findPatchID("bottom"); //find cylinder boundary by name
+        
+        const volScalarField& p = mesh.lookupObject<volScalarField>(pName_); //find pressure (p) field
+        const volVectorField& U = mesh.lookupObject<volVectorField>(UName_); //find velosity (U) field
+
+	//------------------- BC on Cylinder.-----------------------------------------------
+        const fixedValueFvPatchVectorField& constVv0=
+    		refCast<const fixedValueFvPatchVectorField>(U.boundaryField()[cylinderPatchId]); // values at the boundary
+        fixedValueFvPatchVectorField& vv0 = 
+    		const_cast<fixedValueFvPatchVectorField&>(constVv0); //const -> unconst
+
+        const fvsPatchVectorField& tangentv = mesh.Sf().boundaryField()[cylinderPatchId];
+        scalarField tv_y = tangentv.component(vector::Y)/Foam::mag(tangentv);//normal
+        scalarField tv_x = tangentv.component(vector::X)/Foam::mag(tangentv);//normal
+        
+        scalar tstep = mesh.time().deltaT().value();
+        scalar Vrot =  Chi_*cos((obr_.time().value()+tstep)*2.0*M_PI*frequency_);   
+
+	forAll(vv0, iFace)
+    	{ 
+            vv0[iFace].component(vector::X)= Vrot*tv_y[iFace];
+            vv0[iFace].component(vector::Y)= -Vrot*tv_x[iFace];
+	}
+
+	//------------------- mixed BC pressure outlet--------------------------------------
+        const mixedFvPatchScalarField& constPp1=
+    		refCast<const mixedFvPatchScalarField>(p.boundaryField()[outletPatchId]); // values at the boundary
+        mixedFvPatchScalarField& pp1 = 
+    		const_cast<mixedFvPatchScalarField&>(constPp1); //const -> no const
+        scalarField& rVpp1 = pp1.refValue(); //- Value field
+	scalarField& rGpp1 = pp1.refGrad(); //- Normal gradient field
+        scalarField& vFpp1 = pp1.valueFraction(); //- Fraction (0-1) of value used for boundary condition
+
+        scalarField o_x = mesh.C().boundaryField()[outletPatchId].component(vector::X);
+
+	//------------------- mixed BC pressure inlet--------------------------------------
+        const mixedFvPatchScalarField& constPp2=
+    		refCast<const mixedFvPatchScalarField>(p.boundaryField()[inletPatchId]); // values at the boundary
+        mixedFvPatchScalarField& pp2 = 
+    		const_cast<mixedFvPatchScalarField&>(constPp2); //const -> no const
+        scalarField& rVpp2 = pp2.refValue(); //- Value field
+	scalarField& rGpp2 = pp2.refGrad(); //- Normal gradient field
+        scalarField& vFpp2 = pp2.valueFraction(); //- Fraction (0-1) of value used for boundary condition
+
+        scalarField i_x = mesh.C().boundaryField()[inletPatchId].component(vector::X);
+
+	//------------------- mixed BC velocity outlet--------------------------------------
+        const mixedFvPatchVectorField& constVv1=
+    		refCast<const mixedFvPatchVectorField>(U.boundaryField()[outletPatchId]); // values at the boundary
+        mixedFvPatchVectorField& vv1 = 
+    		const_cast<mixedFvPatchVectorField&>(constVv1); //const -> no const
+        vectorField& rVvv1 = vv1.refValue(); //- Value field
+	vectorField& rGvv1 = vv1.refGrad(); //- Normal gradient field
+        scalarField& vFvv1 = vv1.valueFraction(); //- Fraction (0-1) of value used for boundary condition
+
+	//------------------- mixed BC velocity inlet--------------------------------------
+        const mixedFvPatchVectorField& constVv2=
+    		refCast<const mixedFvPatchVectorField>(U.boundaryField()[inletPatchId]); // values at the boundary
+        mixedFvPatchVectorField& vv2 = 
+    		const_cast<mixedFvPatchVectorField&>(constVv2); //const -> no const
+        vectorField& rVvv2 = vv2.refValue(); //- Value field
+	vectorField& rGvv2 = vv2.refGrad(); //- Normal gradient field
+        scalarField& vFvv2 = vv2.valueFraction(); //- Fraction (0-1) of value used for boundary condition
+
+
+        //------------------- mixed BC pressure top--------------------------------------
+        const mixedFvPatchScalarField& constPp3=
+    		refCast<const mixedFvPatchScalarField>(p.boundaryField()[topPatchId]); // values at the boundary
+        mixedFvPatchScalarField& pp3 = 
+    		const_cast<mixedFvPatchScalarField&>(constPp3); //const -> no const
+        scalarField& rVpp3 = pp3.refValue(); //- Value field
+	scalarField& rGpp3 = pp3.refGrad(); //- Normal gradient field
+        scalarField& vFpp3 = pp3.valueFraction(); //- Fraction (0-1) of value used for boundary condition
+
+	//------------------- mixed BC pressure bottom--------------------------------------
+        const mixedFvPatchScalarField& constPp4=
+    		refCast<const mixedFvPatchScalarField>(p.boundaryField()[bottomPatchId]); // values at the boundary
+        mixedFvPatchScalarField& pp4 = 
+    		const_cast<mixedFvPatchScalarField&>(constPp4); //const -> no const
+        scalarField& rVpp4 = pp4.refValue(); //- Value field
+	scalarField& rGpp4 = pp4.refGrad(); //- Normal gradient field
+        scalarField& vFpp4 = pp4.valueFraction(); //- Fraction (0-1) of value used for boundary condition
+
+	//------------------- mixed BC velocity top--------------------------------------
+        const mixedFvPatchVectorField& constVv3=
+    		refCast<const mixedFvPatchVectorField>(U.boundaryField()[topPatchId]); // values at the boundary
+        mixedFvPatchVectorField& vv3 = 
+    		const_cast<mixedFvPatchVectorField&>(constVv3); //const -> no const
+        vectorField& rVvv3 = vv3.refValue(); //- Value field
+	vectorField& rGvv3 = vv3.refGrad(); //- Normal gradient field
+        scalarField& vFvv3 = vv3.valueFraction(); //- Fraction (0-1) of value used for boundary condition
+
+	//------------------- mixed BC velocity bottom--------------------------------------
+        const mixedFvPatchVectorField& constVv4=
+    		refCast<const mixedFvPatchVectorField>(U.boundaryField()[bottomPatchId]); // values at the boundary
+        mixedFvPatchVectorField& vv4 = 
+    		const_cast<mixedFvPatchVectorField&>(constVv4); //const -> no const
+        vectorField& rVvv4 = vv4.refValue(); //- Value field
+	vectorField& rGvv4 = vv4.refGrad(); //- Normal gradient field
+        scalarField& vFvv4 = vv4.valueFraction(); //- Fraction (0-1) of value used for boundary condition
+ 
+
+
+        //-------------------------- average velocity--------------------------------------
+        /*scalar sumV =0.0;
+	forAll(constVv2, iFace)
+    	{
+		sumV +=  constVv2[iFace].component(vector::X)*mesh.magSf().boundaryField()[inletPatchId][iFace];
+	}
+	reduce(sumV, Foam::sumOp<scalar>());
+	scalar pArea = gSum(mesh.magSf().boundaryField()[inletPatchId]); // area field 
+	sumV /= pArea;
+
+        */
+    	Field<vector> totForce(force_[0] + force_[1] + force_[2]); //full force (pressure + viscous parts)
+        scalar Fy = totForce[0][1];
+        
+        if (Pstream::master()) Info << nl << Fy <<nl;
+
+        scalar time_p = obr_.time().value()+tstep; //real time
+	time_p -= floor((obr_.time().value()+tstep)*frequency_)/frequency_; //time in a period
+
+        if (v_st1<=-19) {
+        v_st1 = v_st0 = v_st_;
+        per_m = per_first_;
+        per=0;
+        } // start velocity 
+
+        if (time_p<tstep)
+        {
+            F_av = F_av*tstep*frequency_;
+
+             if (Pstream::master()) Info << nl << (fabs(F_av)>epsilon_) <<tab << ( per>per_m) << tab
+                    << (fabs(F_av-F_av_last)<epsilon_/10) <<nl;
+
+            //if (Pstream::master()) Info << nl << per << tab <<per_m << nl;
+
+            if (fabs(F_av)>epsilon_ && per>per_m && fabs(F_av-F_av_last)<epsilon_/50)
+            {
+                timer1 = corr_time_; //correct velocity for corr_time periods (T*corr_time_)
+            
+                scalar dv;
+
+                if (per_m == per_first_) //only for the first correction 
+                {
+                    dv = dv_start_;
+                    per_m = per_max_;
+                }
+                else
+                {
+                  
+                    dv = -(F_av*(v_st1-v_st0)/(F_av-F_av_old));//secant method
+                }
+ 
+                da = dv*frequency_/timer1;
+                per = 0;
+                F_av_old = F_av;
+                v_st0 = v_st1;
+            }
+
+            if (timer1>0.99999) timer1-=1.0;
+            else da = 0.0; // corrector
+
+            F_av_last = F_av;
+            F_av = 0;
+            per++;
+        }
+
+        if (Pstream::master()) Info << nl << "Av. force: " << F_av_last << " Av. velocity: " <<v_st1<< nl;
+        F_av = F_av + Fy;
+        v_st1 = v_st1 + da*tstep;
+
+        
+        if (Phi1!=Phi0_) // start value of phase shift
+        {
+            if (Phi0_>1e-5) 
+                Phi1 = Phi0_;
+            else
+            {
+                Phi1 = time_p*frequency_*Phi0_; //move from 0 to Phi0_
+                if (time_p<tstep)
+                    Phi1 = Phi0_;
+            } 
+        }
+
+        scalar p_b = 2.0*M_PI*frequency_*sin((obr_.time().value()+tstep)*2.0*M_PI*frequency_-Phi1); // new dp/dn at the inf-ty boundary
+        scalar v_b = cos((obr_.time().value()+tstep)*2.0*M_PI*frequency_-Phi1);
+
+       forAll(pp1, iFace)
+    	{   
+            //time value -- obr_.time().value()
+	    if (v_b>=0.0) //outlet (if average velocity > 0 at outlet)
+            {
+    	    rVpp1[iFace] = o_x[iFace]*p_b; //val
+	    rGpp1[iFace] = 0; //grad
+            vFpp1[iFace] = 1; //fraction
+
+	    rVvv1[iFace] = vector(0,0,0); //val
+	    rGvv1[iFace] = vector(0,0,0); //grad
+            vFvv1[iFace] = 0; //fraction
+            }
+	    else
+            {
+    	    rVpp1[iFace] = 0; //val
+	    rGpp1[iFace] = p_b; //grad
+            vFpp1[iFace] = 0; //fraction
+
+	    rVvv1[iFace] = vector(v_b,v_st1, 0); //val
+	    rGvv1[iFace] = vector(0,0,0); //grad
+            vFvv1[iFace] = 1; //fraction
+            }
+	}
+	forAll(pp2, iFace)
+    	{   
+            //time value -- obr_.time().value()
+	    if (v_b<0.0) //inlet
+            {
+    	    rVpp2[iFace] = i_x[iFace]*p_b; //val
+	    rGpp2[iFace] = 0; //grad
+            vFpp2[iFace] = 1; //fraction
+
+            rVvv2[iFace] = vector(0,0,0); //val
+	    rGvv2[iFace] = vector(0,0,0); //grad
+            vFvv2[iFace] = 0; //fraction
+            }
+	    else
+            {
+    	    rVpp2[iFace] = 0; //val
+	    rGpp2[iFace] = -p_b; //grad
+            vFpp2[iFace] = 0; //fraction
+
+            rVvv2[iFace] = vector(v_b,v_st1,0); //val
+	    rGvv2[iFace] = vector(0,0,0); //grad
+            vFvv2[iFace] = 1; //fraction
+            }
+	}
+
+        forAll(pp3, iFace)
+    	{   
+            //time value -- obr_.time().value()
+	    if (v_st1>=0.0) //outlet (if steady velocity > 0 at top)
+            {
+    	    rVpp3[iFace] = 0; //val
+	    rGpp3[iFace] = -da; //grad
+            vFpp3[iFace] = 0; //fraction
+
+	    rVvv3[iFace] = vector(0,0,0); //val
+	    rGvv3[iFace] = vector(0,0,0); //grad
+            vFvv3[iFace] = 0; //fraction
+            }
+	    else
+            {
+    	    rVpp3[iFace] = 0; //val
+	    rGpp3[iFace] = -da; //grad
+            vFpp3[iFace] = 0; //fraction
+
+	    rVvv3[iFace] = vector(v_b,v_st1,0); //val
+	    rGvv3[iFace] = vector(0,0,0); //grad
+            vFvv3[iFace] = 1; //fraction
+            }
+	}
+	forAll(pp4, iFace)
+    	{   
+            //time value -- obr_.time().value()
+	    if (v_st1<0.0) //inlet
+            {
+    	    rVpp4[iFace] = 0; //val
+	    rGpp4[iFace] = da; //grad
+            vFpp4[iFace] = 0; //fraction
+
+            rVvv4[iFace] = vector(0,0,0); //val
+	    rGvv4[iFace] = vector(0,0,0); //grad
+            vFvv4[iFace] = 0; //fraction
+            }
+	    else
+            {
+    	    rVpp4[iFace] = 0; //val
+	    rGpp4[iFace] = da; //grad
+            vFpp4[iFace] = 0; //fraction
+
+            rVvv4[iFace] = vector(v_b,v_st1,0); //val
+	    rGvv4[iFace] = vector(0,0,0); //grad
+            vFvv4[iFace] = 1; //fraction
+            }
+	}
+
+
+//Info<<"point 1";
+    	
+    	pp1.updateCoeffs(); //update boundary conditions
+        pp2.updateCoeffs(); //update boundary conditions
+        pp3.updateCoeffs(); //update boundary conditions
+        pp4.updateCoeffs(); //update boundary conditions
+	vv1.updateCoeffs(); //update boundary conditions
+        vv2.updateCoeffs(); //update boundary conditions
+        vv3.updateCoeffs(); //update boundary conditions
+        vv4.updateCoeffs(); //update boundary conditions
+
+
+    if (writeToFile())
+    {
+         writeCurrentTime(coeffFilePtr_());
+        coeffFilePtr_() << tab << F_av_last << tab<< v_st1 <<endl;
+    }
+
+    return true;
+}
+
+
+bool Foam::functionObjects::UpdateBC::write()
+{
+
+    return true;
+}
+
+
+// ************************************************************************* //

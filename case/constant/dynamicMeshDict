@@ -1,0 +1,110 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2112                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      dynamicMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#include "./0/params"
+
+dynamicFvMesh   dynamicMotionSolverFvMesh;
+
+motionSolverLibs (sixDoFRigidBodyMotion sixDoFexternalForce);
+
+motionSolver    sixDoFRigidBodyMotion;
+
+
+updateControl   timeStep;
+updateInterval  1;
+pi 3.141592654;
+R             1;
+Lz            1;
+rhoSolid      1;
+
+patches         (cylinder);
+innerDistance   100;
+outerDistance   200;
+
+mass           #eval{$rhoSolid*$R*$R*$pi*$Lz };
+centreOfMass    (0.0 0.0 0.0);
+
+massshell #eval{ $mass*(1.0-$gamma)};
+
+
+    //  inertia about the centre of mass
+momentOfInertia (#eval{ $massshell*(6.0*$R*$R+$Lz*$Lz)/12.0 }  #eval{$massshell*(6.0*$R*$R+$Lz*$Lz)/12.0} #eval{$massshell*$R*$R});
+    
+
+orientation
+(
+    1 0 0
+    0 1 0
+    0 0 1
+);
+
+angularMomentum (0 0 0);
+g               (0 0 0);
+rho             rhoInf;
+rhoInf          1;
+
+accelerationRelaxation 0.95;
+accelerationDamping 0.95;
+    
+report          on;
+nIter   3;
+
+solver
+{   
+    //type    symplectic;
+   type    Newmark;
+   gamma   0.5;    // Velocity integration coefficient
+   beta    0.25;   // Position integration coefficient
+}
+
+
+constraints
+{
+    yLine
+    {
+        sixDoFRigidBodyMotionConstraint line;
+        centreOfRotation    (0 0 0);
+        direction           (0 1 0);
+    }
+}
+
+restraints
+{
+    force
+    {
+        sixDoFRigidBodyMotionRestraint        externalForce1;
+        location    (1.0 0.0 0.0);
+        //force      (0 0.1 0);
+        force 
+        {
+           type        cosine;
+           frequency   #eval{1.0/(2.0*$pi*$gamma) };
+           amplitude    #eval{$mass*$phi/$gamma};
+           scale       (0 1 0);
+           level       (0 0 0);
+        }
+                
+    }
+}
+
+
+
+
+// ************************************************************************* //
+
+
+
+// ************************************************************************* //

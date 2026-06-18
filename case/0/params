@@ -1,0 +1,7 @@
+Vel -0.180578;
+gamma 0.6;
+beta 1000;
+phi 0.85; 
+
+pi 3.141592654;
+nu1 #calc"1.0/$beta/$gamma";

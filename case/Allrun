@@ -1,0 +1,53 @@
+#!/bin/bash
+cd ${0%/*} || exit
+
+SOLVER="pimpleFoam"
+LOG_FILE="log.${SOLVER}"
+
+if [ -f system/decomposeParDict ]; then
+    NPROCS=$(grep "^numberOfSubdomains" system/decomposeParDict | awk '{print $2}' | tr -d ';')
+else
+    echo "WARNING: system/decomposeParDict not found, using 1"
+    NPROCS=1
+fi
+
+rm -rf processor* 0.* [1-9]* log.* postProcessing
+
+if [ ! -f constant/polyMesh/points ]; then
+    echo "ERROR: mesh not found in constant/polyMesh"
+    exit 1
+fi
+
+if [ -f system/decomposeParDict ]; then
+    decomposePar -force
+fi
+
+if [ $NPROCS -gt 1 ]; then
+    mpirun -np $NPROCS $SOLVER -parallel > $LOG_FILE 2>&1
+else
+    $SOLVER > $LOG_FILE 2>&1
+fi
+
+if [ -f "$LOG_FILE" ]; then
+    grep "Centre of rotation"   "$LOG_FILE" | cut -d ":" -f 2 | tr -d "()" > cM
+    grep "Linear velocity"      "$LOG_FILE" | cut -d ":" -f 2 | tr -d "()" > lV
+    grep "Angular velocity"     "$LOG_FILE" | cut -d ":" -f 2 | tr -d "()" > aV
+    grep "Orientation"          "$LOG_FILE" | cut -d ":" -f 2 | tr -d "()" > orientation
+    grep -e "^Time = "          "$LOG_FILE" | cut -d " " -f 3 > times
+
+    paste times cM > t_vs_cm
+    paste times lV > t_vs_lv
+    paste times aV > t_vs_av
+    paste times orientation > t_vs_orientation
+
+    rm -f cM lV orientation aV times
+fi
+
+echo "Calculation finished."
+PYTHON_SCRIPT="data.py"
+if [ -f "$PYTHON_SCRIPT" ]; then
+    echo "Running Python script: $PYTHON_SCRIPT"
+    python3 "$PYTHON_SCRIPT"
+else
+    echo "WARNING: Python script $PYTHON_SCRIPT not found, skipping."
+fi
