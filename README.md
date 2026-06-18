@@ -10,23 +10,29 @@ The vibrating robot consists of a rigid cylindrical body (VR) with an internal m
 
 **Motion of the internal mass:**
 
-$$(X, Y) = (a\sin\Phi, \ a\cos\Phi), \qquad \Phi(t) = \phi\cos(\omega t) $$
-
-where $\phi$ is the oscillation amplitude and $\omega$ is the frequency.
-
-**Rigid‑body dynamics** (6 DOF) – equations for the VR’s translational velocity $\mathbf{V} = (V_x, V_y)$ and angular velocity $\Omega$:
-
 $$
-I_{\text{cr}}\dot{\Omega} - m_{\text{vm}}a^2\ddot{\Phi} = M + m_{\text{vm}}(\mathbf{r}_{\text{vm}} \times \dot{\mathbf{V}})_z,
+X = a\sin\Phi, \qquad Y = a\cos\Phi, \qquad \Phi(t) = \phi\cos(\omega t)
 $$
 
+where $X, Y$ are the VM displacements, $\phi$ is the oscillation amplitude, and $\omega$ is the oscillation frequency.
+
+**Rigid-body dynamics** (6 DOF) – equations for the VR's translational velocity components $V_x, V_y$ and angular velocity $\Omega$:
+
 $$
-m_{\text{vr}}\dot{\mathbf{V}} + m_{\text{vm}}\ddot{\mathbf{r}}_{\text{vm}} = \mathbf{F},
+I_{\text{cr}}\dot{\Omega} - m_{\text{vm}}a^2\ddot{\Phi} = M + m_{\text{vm}}(Y\dot{V}_x - X\dot{V}_y),
 $$
 
-where $\mathbf{F}$ and $M$ are the hydrodynamic force and moment from the fluid, $m_{\text{vr}}$ and $m_{\text{vm}}$ are the body and internal masses, and $I_{\text{cr}}$ is the moment of inertia of the body about its centre.
+$$
+m_{\text{vr}}\dot{V}_x + m_{\text{vm}}\ddot{X} = F_x,
+$$
 
-**Fluid dynamics** – incompressible Navier–Stokes equations for the velocity field $\mathbf{u}$ and pressure $p$:
+$$
+m_{\text{vr}}\dot{V}_y + m_{\text{vm}}\ddot{Y} = F_y,
+$$
+
+where $I_{\text{cr}}$ is the moment of inertia of the body, $m_{\text{vr}}$ is the mass of the VR body, $m_{\text{vm}}$ is the internal mass, and $(F_x, F_y)$ and $M$ are the hydrodynamic force components and moment from the fluid.
+
+**Fluid dynamics** – incompressible Navier–Stokes equations for the velocity field $\mathbf{u} = (u_x, u_y)$ and pressure $p$:
 
 $$
 \frac{\partial\mathbf{u}}{\partial t} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\frac{1}{\rho}\nabla p + \nu\Delta\mathbf{u}, \qquad \nabla\cdot\mathbf{u} = 0,
