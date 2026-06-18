@@ -311,3 +311,5 @@ After the post‑processing script finishes, a file `results_table.txt` is creat
 - `Theta` – rotational oscillation amplitude,
 - `phi_V/pi` – phase shift of linear velocity (normalised by π),
 - `phi_Omega/pi` – phase shift of angular velocity (normalised by π).
+
+These numerical values can be directly compared with the analytical predictions from the **Analytical Solution** section. For the given `beta`, `gamma`, and `phi`, substitute them into the formulas for $\kappa$, $\Theta$, $u_{st}$, and the phase shifts $\varphi_V$, $\varphi_\Omega$ to obtain the reference values. The relative errors are typically within the expected ranges (≤ 3% for $\kappa$, ≤ 5% for $\Theta$, ≤ 10% for $u_{st}$).
