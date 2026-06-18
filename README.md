@@ -19,7 +19,7 @@ where $X, Y$ are the VM displacements, $\phi$ is the oscillation amplitude, and 
 **Rigid-body dynamics** (6 DOF) – equations for the VR's translational velocity components $V_x, V_y$ and angular velocity $\Omega$:
 
 $$
-I_{\text{cr}}\dot{\Omega} - m_{\text{vm}}a^2\ddot{\Phi} = M + m_{\text{vm}}(Y\dot{V}_x - X\dot{V}_y),
+I_{\text{body}}\dot{\Omega} - m_{\text{vm}}a^2\ddot{\Phi} = M + m_{\text{vm}}(Y\dot{V}_x - X\dot{V}_y),
 $$
 
 $$
@@ -30,7 +30,7 @@ $$
 m_{\text{vr}}\dot{V}_y + m_{\text{vm}}\ddot{Y} = F_y,
 $$
 
-where $I_{\text{cr}}$ is the moment of inertia of the body, $m_{\text{vr}}$ is the mass of the VR body, $m_{\text{vm}}$ is the internal mass, and $(F_x, F_y)$ and $M$ are the hydrodynamic force components and moment from the fluid.
+where $I_{\text{body}}$ is the moment of inertia of the body, $m_{\text{vr}}$ is the mass of the VR body, $m_{\text{vm}}$ is the internal mass, and $(F_x, F_y)$ and $M$ are the hydrodynamic force components and moment from the fluid.
 
 **Fluid dynamics** – incompressible Navier–Stokes equations for the velocity field $\mathbf{u} = (u_x, u_y)$ and pressure $p$:
 
