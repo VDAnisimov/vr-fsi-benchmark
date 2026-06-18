@@ -80,7 +80,8 @@ where:
 
 $$
 a_V(\beta) \approx 2+\frac{4}{\sqrt{i\beta}}+\frac{2}{i\beta}, \quad
-a_\Omega(\alpha, \beta) \approx \alpha+\frac{2}{\sqrt{i\beta}}+\frac{3}{i\beta}
+a_\Omega(\alpha, \beta) \approx \alpha+\frac{2}{\sqrt{i\beta}}+\frac{3}{i\beta}, \quad 
+where $\alpha = 1 - \gamma$
 $$
 
 **Steady-state (cruising) velocity:**
