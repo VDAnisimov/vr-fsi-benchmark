@@ -204,6 +204,15 @@ restraints
     }
 }
 ```
+### Integration of the equations of motion
+
+The rigid-body dynamics equations are integrated in time using the **Newmark method** with parameters:
+
+- `gamma = 0.5`
+- `beta = 0.25`
+
+This method was chosen because it provides accuracy and stability for this particular problem compared to alternative symplectic schemes.
+
 ### Mesh
 The case uses a conformal mesh generated with an external tool (stored in constant/polyMesh). The mesh is refined near the cylinder to capture the boundary layer and accurately integrate forces and moments. For convergence studies, alternative meshes are provided in the meshes/ folder (coarse, medium, fine).
 
