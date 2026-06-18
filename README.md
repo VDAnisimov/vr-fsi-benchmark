@@ -1,6 +1,6 @@
 ## Overview
 
-This repository contains a complete OpenFOAM case for a **two-way Fluid-Structure Interaction (FSI) benchmark** based on a vibrating robot (VR). The model simulates a cylinder containing an internal oscillating mass, which generates oscillations and causes the cylinder to move through a viscous incompressible fluid. This problem has a **known analytical solution**, making it an ideal test case for code verification and validation of FSI solvers.
+This repository contains a complete OpenFOAM case for a **two-way Fluid-Structure Interaction (FSI) benchmark** based on a Vibration-driven robot (VR). The model simulates a cylinder containing an internal oscillating mass, which generates oscillations and causes the cylinder to move through a viscous incompressible fluid. This problem has a **known analytical solution**, making it an ideal test case for code verification and validation of FSI solvers.
 
 ##  Problem Description
 
