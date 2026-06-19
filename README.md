@@ -1,6 +1,6 @@
 ## Overview
 
-This repository contains a complete OpenFOAM case for a **two-way Fluid-Structure Interaction (FSI) benchmark** based on a vibrating robot (VR). The model simulates a cylinder containing an internal oscillating mass, which generates oscillations and causes the cylinder to move through a viscous incompressible fluid. This problem has a **known analytical solution**, making it an ideal test case for code verification and validation of FSI solvers.
+This repository contains a complete OpenFOAM case for a **two-way Fluid-Structure Interaction (FSI) benchmark** based on a Vibration-driven robot (VR). The model simulates a cylinder containing an internal oscillating mass, which generates oscillations and causes the cylinder to move through a viscous incompressible fluid. This problem has a **known analytical solution**, making it an ideal test case for code verification and validation of FSI solvers.
 
 ##  Problem Description
 
@@ -10,23 +10,29 @@ The vibrating robot consists of a rigid cylindrical body (VR) with an internal m
 
 **Motion of the internal mass:**
 
-$$(X, Y) = (a\sin\Phi, \ a\cos\Phi), \qquad \Phi(t) = \phi\cos(\omega t) $$
-
-where $\phi$ is the oscillation amplitude and $\omega$ is the frequency.
-
-**Rigid‑body dynamics** (6 DOF) – equations for the VR’s translational velocity $\mathbf{V} = (V_x, V_y)$ and angular velocity $\Omega$:
-
 $$
-I_{\text{cr}}\dot{\Omega} - m_{\text{vm}}a^2\ddot{\Phi} = M + m_{\text{vm}}(\mathbf{r}_{\text{vm}} \times \dot{\mathbf{V}})_z,
+X = a\sin\Phi, \qquad Y = a\cos\Phi, \qquad \Phi(t) = \phi\cos(\omega t)
 $$
 
+where $X, Y$ are the VM displacements, $\phi$ is the oscillation amplitude, and $\omega$ is the oscillation frequency.
+
+**Rigid-body dynamics** (6 DOF) – equations for the VR's translational velocity components $V_x, V_y$ and angular velocity $\Omega$:
+
 $$
-m_{\text{vr}}\dot{\mathbf{V}} + m_{\text{vm}}\ddot{\mathbf{r}}_{\text{vm}} = \mathbf{F},
+I_{\text{body}}\dot{\Omega} - m_{\text{vm}}a^2\ddot{\Phi} = M + m_{\text{vm}}(Y\dot{V}_x - X\dot{V}_y),
 $$
 
-where $\mathbf{F}$ and $M$ are the hydrodynamic force and moment from the fluid, $m_{\text{vr}}$ and $m_{\text{vm}}$ are the body and internal masses, and $I_{\text{cr}}$ is the moment of inertia of the body about its centre.
+$$
+m_{\text{vr}}\dot{V}_x + m_{\text{vm}}\ddot{X} = F_x,
+$$
 
-**Fluid dynamics** – incompressible Navier–Stokes equations for the velocity field $\mathbf{u}$ and pressure $p$:
+$$
+m_{\text{vr}}\dot{V}_y + m_{\text{vm}}\ddot{Y} = F_y,
+$$
+
+where $I_{\text{body}}$ is the moment of inertia of the body, $m_{\text{vr}}$ is the mass of the VR body, $m_{\text{vm}}$ is the internal mass, and $(F_x, F_y)$ and $M$ are the hydrodynamic force components and moment from the fluid.
+
+**Fluid dynamics** – incompressible Navier–Stokes equations for the velocity field $\mathbf{u} = (u_x, u_y)$ and pressure $p$:
 
 $$
 \frac{\partial\mathbf{u}}{\partial t} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\frac{1}{\rho}\nabla p + \nu\Delta\mathbf{u}, \qquad \nabla\cdot\mathbf{u} = 0,
@@ -74,7 +80,8 @@ where:
 
 $$
 a_V(\beta) \approx 2+\frac{4}{\sqrt{i\beta}}+\frac{2}{i\beta}, \quad
-a_\Omega(\alpha, \beta) \approx \alpha+\frac{2}{\sqrt{i\beta}}+\frac{3}{i\beta}
+a_\Omega(\alpha, \beta) \approx \alpha+\frac{2}{\sqrt{i\beta}}+\frac{3}{i\beta}, \quad 
+\alpha = 1 - \gamma
 $$
 
 **Steady-state (cruising) velocity:**
@@ -197,6 +204,15 @@ restraints
     }
 }
 ```
+### Integration of the equations of motion
+
+The rigid-body dynamics equations are integrated in time using the **Newmark method** with parameters:
+
+- `gamma = 0.5`
+- `beta = 0.25`
+
+This method was chosen because it provides accuracy and stability for this particular problem compared to alternative symplectic schemes.
+
 ### Mesh
 The case uses a conformal mesh generated with an external tool (stored in constant/polyMesh). The mesh is refined near the cylinder to capture the boundary layer and accurately integrate forces and moments. For convergence studies, alternative meshes are provided in the meshes/ folder (coarse, medium, fine).
 
@@ -295,3 +311,5 @@ After the post‑processing script finishes, a file `results_table.txt` is creat
 - `Theta` – rotational oscillation amplitude,
 - `phi_V/pi` – phase shift of linear velocity (normalised by π),
 - `phi_Omega/pi` – phase shift of angular velocity (normalised by π).
+
+These numerical values can be directly compared with the analytical predictions from the **Analytical Solution** section. For the given `beta`, `gamma`, and `phi`, substitute them into the formulas for $\kappa$, $\Theta$, $u_{st}$, and the phase shifts $\varphi_V$, $\varphi_\Omega$ to obtain the reference values. The relative errors are typically within the expected ranges (≤ 3% for $\kappa$, ≤ 5% for $\Theta$, ≤ 10% for $u_{st}$).
