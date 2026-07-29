@@ -239,7 +239,7 @@ All physical parameters are stored in `0/params`. Each file contains a single va
 A typical `params` file looks like:
 
 ```cpp
-Vel -0.18;    // must be -u_st * kappa / gamma
+Vel -0.179;    // must be -u_st * kappa / gamma
 gamma 0.6;
 beta 1000;
 phi 0.85;
