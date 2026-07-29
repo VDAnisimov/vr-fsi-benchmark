@@ -1,4 +1,7 @@
 ## Overview
+<p align="center">
+  <img src="assets/demo.gif" alt="FSI simulation of vibrating robot" width="500">
+</p>
 
 This repository contains a complete OpenFOAM case for a **two-way Fluid-Structure Interaction (FSI) benchmark** based on a Vibration-driven robot (VR). The model simulates a cylinder containing an internal oscillating mass, which generates oscillations and causes the cylinder to move through a viscous incompressible fluid. This problem has a **known analytical solution**, making it an ideal test case for code verification and validation of FSI solvers.
 
@@ -6,7 +9,7 @@ This repository contains a complete OpenFOAM case for a **two-way Fluid-Structur
 
 ### Physical Model
 
-The vibrating robot consists of a rigid cylindrical body (VR) with an internal mass (VM) that oscillates along a circular path of radius `a` inside the body.
+The vibrating robot consists of a rigid cylindrical body (VR) with an internal mass (IM) that oscillates along a circular path of radius `a` inside the body.
 
 **Motion of the internal mass:**
 
@@ -17,20 +20,21 @@ $$
 where $X, Y$ are the VM displacements, $\phi$ is the oscillation amplitude, and $\omega$ is the oscillation frequency.
 
 **Rigid-body dynamics** (6 DOF) – equations for the VR's translational velocity components $V_x, V_y$ and angular velocity $\Omega$:
+**Rigid-body dynamics (3 DOF)**
 
 $$
-I_{\text{body}}\dot{\Omega} - m_{\text{vm}}a^2\ddot{\Phi} = M + m_{\text{vm}}(Y\dot{V}_x - X\dot{V}_y),
-$$
-
-$$
-m_{\text{vr}}\dot{V}_x + m_{\text{vm}}\ddot{X} = F_x,
+I_{\text{b}}\dot{\Omega} - m_{\text{im}}a^2\ddot{\Phi} = M + m_{\text{im}}(Y\dot{V}_x - X\dot{V}_y),
 $$
 
 $$
-m_{\text{vr}}\dot{V}_y + m_{\text{vm}}\ddot{Y} = F_y,
+m_{\text{VR}}\dot{V}_x + m_{\text{im}}\ddot{X} = F_x,
 $$
 
-where $I_{\text{body}}$ is the moment of inertia of the body, $m_{\text{vr}}$ is the mass of the VR body, $m_{\text{vm}}$ is the internal mass, and $(F_x, F_y)$ and $M$ are the hydrodynamic force components and moment from the fluid.
+$$
+m_{\text{VR}}\dot{V}_y + m_{\text{im}}\ddot{Y} = F_y,
+$$
+
+where $I_{\text{b}}$ is the moment of inertia of the body, $m_{\text{VR}}$ is the mass of the VR body, $m_{\text{im}}$ is the internal mass, and $(F_x, F_y)$ and $M$ are the hydrodynamic force components and moment from the fluid.
 
 **Fluid dynamics** – incompressible Navier–Stokes equations for the velocity field $\mathbf{u} = (u_x, u_y)$ and pressure $p$:
 
@@ -54,11 +58,11 @@ This formulation provides a complete two‑way FSI coupling: the body motion inf
 ### Why This Is an Ideal Benchmark
 
 | Feature | Status |
-|---------|--------|
-| Bio-mimetic propulsion (flapping-wing principle) | V |
-| Full two-way FSI coupling | V |
-| Viscous incompressible flow (unsteady Navier-Stokes) | V |
-| Analytical solution available | V |
+|:--------:|:------:|
+| Bio-mimetic propulsion (flapping-wing principle) | ✓ |
+| Full two-way FSI coupling | ✓ |
+| Viscous incompressible flow (unsteady Navier-Stokes) | ✓ |
+| Analytical solution available | ✓ |
 
 ---
 
@@ -66,7 +70,7 @@ This formulation provides a complete two‑way FSI coupling: the body motion inf
 
 An asymptotic solution has been derived for the steady-state motion under the assumptions:
 - Small oscillation angles: $\phi \ll 1$
-- Small mass ratio: $\gamma = m_{\text{vm}}/m_{\text{vr}} \ll 1$
+- Small mass ratio: $\gamma = m_{\text{im}}/m_{\text{VR}} \ll 1$
 
 ### Key Analytical Results
 
@@ -95,8 +99,8 @@ $$
 The phase shifts between the rotational ($\varphi_\Omega$) and translational ($\varphi_V$) oscillations of the robot body and the internal mass oscillation are given by:
 
 $$
-\varphi_V = \arccos\left( -\frac{\mathrm{Re}\, a_V}{|a_V|} \right), \qquad
-\varphi_\Omega = \arccos\left( -\frac{\mathrm{Re}\, a_\Omega}{|a_\Omega|} \right),
+\varphi_V = \arccos\left( -\frac{\mathrm{Re}(a_V)}{|a_V|} \right), \qquad
+\varphi_\Omega = \arccos\left( -\frac{\mathrm{Re}(a_\Omega)}{|a_\Omega|} \right),
 $$
 ## Numerical Implementation in OpenFOAM
 ### Repository structure
@@ -121,14 +125,13 @@ vr-fsi-benchmark/
 │   └──  data.py                 # post-proccessing (in Allrun)  
 ├── libs/                        # Additional libraries
 │   ├── externalForceSixDoF/
+│   ├── cruising_auto_new/
 │   └── cruising_auto/
 ├── meshes/                      # different meshes
 │   ├── baseline/
 │   ├── coarse/
 │   ├── medium/
 │   └── fine/
-├── .gitignore
-├── LICENSE
 └── README.md                    
 ```
 ### Solver Configuration
@@ -208,8 +211,8 @@ restraints
 
 The rigid-body dynamics equations are integrated in time using the **Newmark method** with parameters:
 
-- `gamma = 0.5`
-- `beta = 0.25`
+- `gamma* = 0.5`
+- `beta* = 0.25`
 
 This method was chosen because it provides accuracy and stability for this particular problem compared to alternative symplectic schemes.
 
@@ -223,7 +226,7 @@ All physical parameters are stored in `0/params`. Each file contains a single va
 
 | File | Symbol | Meaning | Typical value |
 |------|--------|---------|---------------|
-| `Vel` | `u0` | initial velocity  | set as `u_st·κ/γ` |
+| `Vel` | `u0` | initial velocity  | set as `-u_st·κ/γ` |
 | `gamma` | `γ` | mass ratio | 0.6 |
 | `beta` | `β` | frequency parameter | 1000–4000 |
 | `phi` | `φ` | oscillation amplitude (rad) | 0.2–0.85 |
@@ -231,12 +234,12 @@ All physical parameters are stored in `0/params`. Each file contains a single va
 | `nu1` | `ν₁` | derived `1/(βγ)` | computed automatically |
 
 > **Important:**  
-> The initial velocity must be carefully chosen. It is **not** `u_st` itself, but `u_st · κ / γ`. This ensures consistency with the solver’s non‑dimensional form. For reference, the analytical `u_st` is given in the equation above.
+> The initial velocity must be carefully chosen. It is **not** `u_st` itself, but `-u_st · κ / γ`. This ensures consistency with the solver’s non‑dimensional form. For reference, the analytical `u_st` is given in the equation above. Vel is negative because it specifies the incoming flow velocity.
 
 A typical `params` file looks like:
 
 ```cpp
-Vel -0.18;    // must be u_st * kappa / gamma
+Vel -0.18;    // must be -u_st * kappa / gamma
 gamma 0.6;
 beta 1000;
 phi 0.85;
@@ -244,11 +247,17 @@ pi 3.141592654;
 nu1 #calc"1.0/$beta/$gamma";
 ```
 ## Running the case
-Prerequisites
-OpenFOAM 2112 (or any version that includes pimpleFoam)
 
-Python 3 with numpy, matplotlib, pandas
+Prerequisites: OpenFOAM 2112 or newer (as it was tested on this version), Python 3 with numpy, matplotlib, pandas**
 
+---
+
+Clone the repository and enter the directory:
+```
+bash
+git clone https://github.com/VDAnisimov/vr-fsi-benchmark.git
+cd vr-fsi-benchmark
+```
 #### Additional libraries
 
 This case requires two custom OpenFOAM libraries, which are included in the repository:
@@ -256,6 +265,10 @@ This case requires two custom OpenFOAM libraries, which are included in the repo
 - **`externalForceSixDoF`** – implements the `externalForce1` restraint used in `dynamicMeshDict`. It applies the force from the internal oscillating mass to the rigid body at a specified point, automatically computing the resulting moment.
 
 - **`cruising_auto`** – automatically finds the steady‑state (cruising) velocity of the vibrating robot. To do this, it uses the secant method (chord method): it iteratively adjusts the velocity until the average hydrodynamic force over one period becomes zero.
+  
+**Note on library versions:**
+> - `cruising_auto` (original) – for OpenFOAM **2112 and older**.
+> - `cruising_auto_new` – for OpenFOAM versions **newer than 2112**.
 
 ##### Compilation
 
@@ -272,13 +285,13 @@ cd libs/externalForceSixDoF
 wmake
 cd ../..
 ```
-## Steps
-Clone the repository and enter the directory:
-```
-bash
-git clone https://github.com/VDAnisimov/vr-fsi-benchmark.git
-cd vr-fsi-benchmark
-```
+## Parallel execution
+
+By default, the case is configured to run on **16 processors** using the `hierarchical` decomposition method with the split `(4 4 1)` in the `n` entry (settings in `case/system/decomposeParDict`). You can change the number of cores, the splitting pattern. The `Allrun` script automatically reads the `numberOfSubdomains` value and launches the solver with the appropriate number of MPI processes.
+
+If you prefer to run in serial, simply set `numberOfSubdomains 1;` and `./Allrun` will handle the rest.
+## Run
+
 (Optional) Edit the parameters in case/0/params/ if needed. Then navigate to the case folder and run:
 ```
 bash
