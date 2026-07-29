@@ -235,6 +235,8 @@ All physical parameters are stored in `0/params`. Each file contains a single va
 
 > **Important:**  
 > The initial velocity must be carefully chosen. It is **not** `u_st` itself, but `-u_st · κ / γ`. This ensures consistency with the solver’s non‑dimensional form. For reference, the analytical `u_st` is given in the equation above. Vel is negative because it specifies the incoming flow velocity.
+> Additionally, it should be emphasized that this initial velocity is deliberately set to differ from the steady‑state (cruise) solution. It is chosen in this way to demonstrate the robustness of the methodology for determining the cruise speed.
+
 
 A typical `params` file looks like:
 
